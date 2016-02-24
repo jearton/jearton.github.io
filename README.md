@@ -1,2 +1,2 @@
 #jearton.github.io
-jearton's blog
+http://jearton.github.io/
