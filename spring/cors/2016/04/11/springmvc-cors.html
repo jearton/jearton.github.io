@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>SpringMVC开启CORS支持</title>
+  <meta name="description" content="浏览器出于安全考虑，限制了JS发起跨站请求，使用XHR对象发起请求必须遵循同源策略（SOP：Same Origin Policy），跨站请求会被浏览器阻止，这对开发者来说是很痛苦的一件事，尤其是要开发前后端分离的应用时。">
+
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="canonical" href="http://yourdomain.com/spring/cors/2016/04/11/springmvc-cors.html">
+  <link rel="alternate" type="application/rss+xml" title="Jear" href="http://yourdomain.com/feed.xml">
+</head>
+
+
+  <body>
+
+    <header class="site-header">
+
+  <div class="wrapper">
+
+    <a class="site-title" href="/">Jear</a>
+
+    <nav class="site-nav">
+      <a href="#" class="menu-icon">
+        <svg viewBox="0 0 18 15">
+          <path fill="#424242" d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.031C17.335,0,18,0.665,18,1.484L18,1.484z"/>
+          <path fill="#424242" d="M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0c0-0.82,0.665-1.484,1.484-1.484 h15.031C17.335,6.031,18,6.696,18,7.516L18,7.516z"/>
+          <path fill="#424242" d="M18,13.516C18,14.335,17.335,15,16.516,15H1.484C0.665,15,0,14.335,0,13.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.031C17.335,12.031,18,12.696,18,13.516L18,13.516z"/>
+        </svg>
+      </a>
+
+      <div class="trigger">
+        
+          
+          <a class="page-link" href="/about/">About</a>
+          
+        
+          
+        
+          
+        
+          
+        
+      </div>
+    </nav>
+
+  </div>
+
+</header>
+
+
+    <div class="page-content">
+      <div class="wrapper">
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title" itemprop="name headline">SpringMVC开启CORS支持</h1>
+    <p class="post-meta"><time datetime="2016-04-11T12:56:05+08:00" itemprop="datePublished">Apr 11, 2016</time></p>
+  </header>
+
+  <div class="post-content" itemprop="articleBody">
+    <p>浏览器出于安全考虑，限制了JS发起跨站请求，使用XHR对象发起请求必须遵循同源策略（SOP：Same Origin Policy），跨站请求会被浏览器阻止，这对开发者来说是很痛苦的一件事，尤其是要开发前后端分离的应用时。</p>
+
+<p>在现代化的Web开发中，不同网络环境下的资源数据共享越来越普遍，同源策略可以说是在一定程度上限制了Web API的发展。</p>
+
+<p>简单的说，CORS就是为了AJAX能够安全跨域而生的。至于CORS的安全性研究，本文不做探讨。</p>
+
+<p><br /></p>
+
+<hr />
+
+<p><br /></p>
+
+<h3 id="section"><strong>目录</strong></h3>
+
+<ol>
+  <li>
+    <p>CORS浅述</p>
+  </li>
+  <li>
+    <p>如何使用？CORS的HTTP头</p>
+  </li>
+  <li>
+    <p>初始项目准备</p>
+  </li>
+  <li>
+    <p>CorsFilter: 过滤器阶段的CORS</p>
+  </li>
+  <li>
+    <p>CorsInterceptor: 拦截器阶段的CORS</p>
+  </li>
+  <li>
+    <p>@CrossOrigin：Handler阶段的CORS</p>
+  </li>
+  <li>
+    <p>小结</p>
+  </li>
+  <li>
+    <p>追求极致的开发体验：整合第三方CORSFilter</p>
+  </li>
+  <li>
+    <p>示例代码下载</p>
+  </li>
+</ol>
+
+<p><br /></p>
+
+<hr />
+
+<p><br /></p>
+
+<h3 id="cors"><strong>CORS浅述</strong></h3>
+
+<p>名词解释：跨域资源共享（Cross-Origin Resource Sharing）</p>
+
+<p>概念：是一种跨域机制、规范、标准，怎么叫都一样，但是这套标准是针对服务端的，而浏览器端只要支持HTML5即可。</p>
+
+<p>作用：可以让服务端决定哪些请求源可以进来拿数据，所以服务端起主导作用（所以出了事找后台程序猿，无关前端^ ^）</p>
+
+<p>常用场景：</p>
+
+<ul>
+  <li>前后端完全分离的应用，比如Hybrid App</li>
+  <li>开放式只读API，JS能够自由访问，比如地图、天气、时间……</li>
+</ul>
+
+<p><br /></p>
+
+<hr />
+
+<p><br /></p>
+
+<h3 id="corshttp"><strong>如何使用？CORS的HTTP头</strong></h3>
+
+<blockquote>
+  <p>要实现CORS跨域其实非常简单，说白了就是在服务端设置一系列的HTTP头，主要分为请求头和响应头，在请求和响应时加上这些HTTP头即可轻松实现CORS</p>
+</blockquote>
+
+<blockquote>
+  <p>请求头和响应头信息都是在服务端设置好的，一般在Filter阶段设置，浏览器端不用关心，唯一要设置的地方就是：跨域时是否要携带cookie</p>
+</blockquote>
+
+<ul>
+  <li>HTTP请求头：</li>
+</ul>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>#请求域
+Origin: ”http://localhost:3000“
+
+#这两个属性只出现在预检请求中，即OPTIONS请求
+Access-Control-Request-Method: ”POST“
+Access-Control-Request-Headers: ”content-type“
+</code></pre>
+</div>
+<ul>
+  <li>HTTP响应头：</li>
+</ul>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>#允许向该服务器提交请求的URI，*表示全部允许，在SpringMVC中，如果设成*，会自动转成当前请求头中的Origin
+Access-Control-Allow-Origin: ”http://localhost:3000“
+
+#允许访问的头信息
+Access-Control-Expose-Headers: "Set-Cookie"
+
+#预检请求的缓存时间（秒），即在这个时间段里，对于相同的跨域请求不会再预检了
+Access-Control-Max-Age: ”1800”
+
+#允许Cookie跨域，在做登录校验的时候有用
+Access-Control-Allow-Credentials: “true”
+
+#允许提交请求的方法，*表示全部允许
+Access-Control-Allow-Methods:GET,POST,PUT,DELETE,PATCH
+</code></pre>
+</div>
+<p><br /></p>
+
+<hr />
+
+<p><br /></p>
+
+<h3 id="section-1"><strong>初始项目准备</strong></h3>
+
+<ul>
+  <li>
+    <p>补充一下，对于简单跨域和非简单跨域，可以这么理解：
+&gt;1. 简单跨域就是GET，HEAD和POST请求，但是POST请求的”Content-Type”只能是application/x-www-form-urlencoded, multipart/form-data 或 text/plain
+&gt;2. 反之，就是非简单跨域，此跨域有一个预检机制，说直白点，就是会发两次请求，一次OPTIONS请求，一次真正的请求
+<br /></p>
+  </li>
+  <li>
+    <p>首先新建一个静态web项目，定义三种类型的请求：简单跨域请求，非简单跨域请求，带Cookie信息的请求(做登录校验)。代码如下：</p>
+  </li>
+</ul>
+
+<div class="highlighter-rouge"><pre class="highlight"><code><span class="cp">&lt;!DOCTYPE html&gt;</span>
+<span class="nt">&lt;html</span> <span class="na">lang=</span><span class="s">"en"</span><span class="nt">&gt;</span>
+<span class="nt">&lt;head&gt;</span>
+    <span class="nt">&lt;meta</span> <span class="na">charset=</span><span class="s">"UTF-8"</span><span class="nt">&gt;</span>
+    <span class="nt">&lt;title&gt;</span>跨域demo<span class="nt">&lt;/title&gt;</span>
+    <span class="nt">&lt;link</span> <span class="na">rel=</span><span class="s">"stylesheet"</span> <span class="na">href=</span><span class="s">"node_modules/amazeui/dist/css/amazeui.min.css"</span><span class="nt">&gt;</span>
+<span class="nt">&lt;/head&gt;</span>
+
+<span class="nt">&lt;body</span> <span class="na">class=</span><span class="s">"am-container"</span><span class="nt">&gt;</span>
+<span class="c">&lt;!--简单跨域--&gt;</span>
+<span class="nt">&lt;button</span> <span class="na">class=</span><span class="s">"am-btn am-btn-primary"</span> <span class="na">onclick=</span><span class="s">"getUsers(this)"</span><span class="nt">&gt;</span>
+    简单跨域: 获取用户列表
+<span class="nt">&lt;/button&gt;</span>
+<span class="nt">&lt;p</span> <span class="na">class=</span><span class="s">"am-text-danger"</span><span class="nt">&gt;&lt;/p&gt;</span>
+
+<span class="c">&lt;!--非简单跨域--&gt;</span>
+<span class="nt">&lt;button</span> <span class="na">class=</span><span class="s">"am-btn am-btn-primary"</span> <span class="na">onclick=</span><span class="s">"addUser(this)"</span><span class="nt">&gt;</span>
+    非简单跨域: 添加用户(JSON请求)
+<span class="nt">&lt;/button&gt;</span>
+<span class="nt">&lt;input</span> <span class="na">type=</span><span class="s">"text"</span> <span class="na">placeholder=</span><span class="s">"用户名"</span><span class="nt">&gt;</span>
+<span class="nt">&lt;p</span> <span class="na">class=</span><span class="s">"am-text-danger"</span><span class="nt">&gt;&lt;/p&gt;</span>
+
+<span class="c">&lt;!--检查是否登录--&gt;</span>
+<span class="nt">&lt;button</span> <span class="na">class=</span><span class="s">"am-btn am-btn-primary am-margin-right"</span> <span class="na">onclick=</span><span class="s">"checkLogin(this)"</span><span class="nt">&gt;</span>
+    登录校验
+<span class="nt">&lt;/button&gt;</span>
+<span class="nt">&lt;p</span> <span class="na">class=</span><span class="s">"am-text-danger"</span><span class="nt">&gt;&lt;/p&gt;</span>
+
+<span class="c">&lt;!--登录--&gt;</span>
+<span class="nt">&lt;button</span> <span class="na">class=</span><span class="s">"am-btn am-btn-primary"</span> <span class="na">onclick=</span><span class="s">"login(this)"</span><span class="nt">&gt;</span>
+    登录
+<span class="nt">&lt;/button&gt;</span>
+<span class="nt">&lt;input</span> <span class="na">type=</span><span class="s">"text"</span> <span class="na">placeholder=</span><span class="s">"用户名"</span><span class="nt">&gt;</span>
+<span class="nt">&lt;p</span> <span class="na">class=</span><span class="s">"am-text-danger"</span><span class="nt">&gt;&lt;/p&gt;</span>
+<span class="nt">&lt;/body&gt;</span>
+<span class="nt">&lt;script </span><span class="na">src=</span><span class="s">"node_modules/jquery/dist/jquery.min.js"</span><span class="nt">&gt;&lt;/script&gt;</span>
+<span class="nt">&lt;script </span><span class="na">src=</span><span class="s">"node_modules/amazeui/dist/js/amazeui.js"</span><span class="nt">&gt;&lt;/script&gt;</span>
+<span class="nt">&lt;script&gt;</span>
+    <span class="kd">function</span> <span class="nx">getUsers</span><span class="p">(</span><span class="nx">btn</span><span class="p">)</span> <span class="p">{</span>
+        <span class="kd">var</span> <span class="nx">$btn</span> <span class="o">=</span> <span class="nx">$</span><span class="p">(</span><span class="nx">btn</span><span class="p">);</span>
+        <span class="nx">$</span><span class="p">.</span><span class="nx">ajax</span><span class="p">({</span>
+            <span class="na">type</span><span class="p">:</span> <span class="s1">'get'</span><span class="p">,</span>
+            <span class="na">url</span><span class="p">:</span> <span class="s1">'http://localhost:8080/api/users'</span><span class="p">,</span>
+            <span class="na">contentType</span><span class="p">:</span> <span class="s2">"application/json;charset=UTF-8"</span>
+        <span class="p">}).</span><span class="nx">then</span><span class="p">(</span>
+                <span class="kd">function</span> <span class="p">(</span><span class="nx">obj</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="nx">$btn</span><span class="p">.</span><span class="nx">next</span><span class="p">(</span><span class="s1">'p'</span><span class="p">).</span><span class="nx">html</span><span class="p">(</span><span class="nx">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">(</span><span class="nx">obj</span><span class="p">));</span>
+                <span class="p">},</span>
+                <span class="kd">function</span> <span class="p">()</span> <span class="p">{</span>
+                    <span class="nx">$btn</span><span class="p">.</span><span class="nx">next</span><span class="p">(</span><span class="s1">'p'</span><span class="p">).</span><span class="nx">html</span><span class="p">(</span><span class="s1">'error...'</span><span class="p">);</span>
+                <span class="p">}</span>
+        <span class="p">)</span>
+    <span class="p">}</span>
+
+    <span class="kd">function</span> <span class="nx">addUser</span><span class="p">(</span><span class="nx">btn</span><span class="p">)</span> <span class="p">{</span>
+        <span class="kd">var</span> <span class="nx">$btn</span> <span class="o">=</span> <span class="nx">$</span><span class="p">(</span><span class="nx">btn</span><span class="p">);</span>
+        <span class="kd">var</span> <span class="nx">name</span> <span class="o">=</span> <span class="nx">$btn</span><span class="p">.</span><span class="nx">next</span><span class="p">(</span><span class="s1">'input'</span><span class="p">).</span><span class="nx">val</span><span class="p">();</span>
+        <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">name</span><span class="p">)</span> <span class="p">{</span>
+            <span class="nx">$btn</span><span class="p">.</span><span class="nx">next</span><span class="p">(</span><span class="s1">'input'</span><span class="p">).</span><span class="nx">next</span><span class="p">(</span><span class="s1">'p'</span><span class="p">).</span><span class="nx">html</span><span class="p">(</span><span class="s1">'用户名不能为空'</span><span class="p">);</span>
+            <span class="k">return</span><span class="p">;</span>
+        <span class="p">}</span>
+        <span class="nx">$</span><span class="p">.</span><span class="nx">ajax</span><span class="p">({</span>
+            <span class="na">type</span><span class="p">:</span> <span class="s1">'post'</span><span class="p">,</span>
+            <span class="na">url</span><span class="p">:</span> <span class="s1">'http://localhost:8080/api/users'</span><span class="p">,</span>
+            <span class="na">contentType</span><span class="p">:</span> <span class="s2">"application/json;charset=UTF-8"</span><span class="p">,</span>
+            <span class="na">data</span><span class="p">:</span> <span class="nx">name</span><span class="p">,</span>
+            <span class="na">dataType</span><span class="p">:</span> <span class="s1">'json'</span>
+        <span class="p">}).</span><span class="nx">then</span><span class="p">(</span>
+                <span class="kd">function</span> <span class="p">(</span><span class="nx">obj</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="nx">$btn</span><span class="p">.</span><span class="nx">next</span><span class="p">(</span><span class="s1">'input'</span><span class="p">).</span><span class="nx">next</span><span class="p">(</span><span class="s1">'p'</span><span class="p">).</span><span class="nx">html</span><span class="p">(</span><span class="nx">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">(</span><span class="nx">obj</span><span class="p">));</span>
+                <span class="p">},</span>
+                <span class="kd">function</span> <span class="p">()</span> <span class="p">{</span>
+                    <span class="nx">$btn</span><span class="p">.</span><span class="nx">next</span><span class="p">(</span><span class="s1">'input'</span><span class="p">).</span><span class="nx">next</span><span class="p">(</span><span class="s1">'p'</span><span class="p">).</span><span class="nx">html</span><span class="p">(</span><span class="s1">'error...'</span><span class="p">);</span>
+                <span class="p">}</span>
+        <span class="p">)</span>
+    <span class="p">}</span>
+
+    <span class="kd">function</span> <span class="nx">checkLogin</span><span class="p">(</span><span class="nx">btn</span><span class="p">)</span> <span class="p">{</span>
+        <span class="kd">var</span> <span class="nx">$btn</span> <span class="o">=</span> <span class="nx">$</span><span class="p">(</span><span class="nx">btn</span><span class="p">);</span>
+        <span class="nx">$</span><span class="p">.</span><span class="nx">ajax</span><span class="p">({</span>
+            <span class="na">type</span><span class="p">:</span> <span class="s1">'get'</span><span class="p">,</span>
+            <span class="na">url</span><span class="p">:</span> <span class="s1">'http://localhost:8080/api/user/login'</span><span class="p">,</span>
+            <span class="na">contentType</span><span class="p">:</span> <span class="s2">"application/json;charset=UTF-8"</span><span class="p">,</span>
+            <span class="na">xhrFields</span><span class="p">:</span> <span class="p">{</span>
+                <span class="na">withCredentials</span><span class="p">:</span> <span class="kc">true</span>
+            <span class="p">}</span>
+        <span class="p">}).</span><span class="nx">then</span><span class="p">(</span>
+                <span class="kd">function</span> <span class="p">(</span><span class="nx">obj</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="nx">$btn</span><span class="p">.</span><span class="nx">next</span><span class="p">(</span><span class="s1">'p'</span><span class="p">).</span><span class="nx">html</span><span class="p">(</span><span class="nx">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">(</span><span class="nx">obj</span><span class="p">));</span>
+                <span class="p">},</span>
+                <span class="kd">function</span> <span class="p">()</span> <span class="p">{</span>
+                    <span class="nx">$btn</span><span class="p">.</span><span class="nx">next</span><span class="p">(</span><span class="s1">'p'</span><span class="p">).</span><span class="nx">html</span><span class="p">(</span><span class="s1">'error...'</span><span class="p">);</span>
+                <span class="p">}</span>
+        <span class="p">)</span>
+    <span class="p">}</span>
+
+    <span class="kd">function</span> <span class="nx">login</span><span class="p">(</span><span class="nx">btn</span><span class="p">)</span> <span class="p">{</span>
+        <span class="kd">var</span> <span class="nx">$btn</span> <span class="o">=</span> <span class="nx">$</span><span class="p">(</span><span class="nx">btn</span><span class="p">);</span>
+        <span class="kd">var</span> <span class="nx">name</span> <span class="o">=</span> <span class="nx">$btn</span><span class="p">.</span><span class="nx">next</span><span class="p">(</span><span class="s1">'input'</span><span class="p">).</span><span class="nx">val</span><span class="p">();</span>
+        <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">name</span><span class="p">)</span> <span class="p">{</span>
+            <span class="nx">$btn</span><span class="p">.</span><span class="nx">next</span><span class="p">(</span><span class="s1">'input'</span><span class="p">).</span><span class="nx">next</span><span class="p">(</span><span class="s1">'p'</span><span class="p">).</span><span class="nx">html</span><span class="p">(</span><span class="s1">'用户名不能为空'</span><span class="p">);</span>
+            <span class="k">return</span><span class="p">;</span>
+        <span class="p">}</span>
+        <span class="nx">$</span><span class="p">.</span><span class="nx">ajax</span><span class="p">({</span>
+            <span class="na">type</span><span class="p">:</span> <span class="s1">'post'</span><span class="p">,</span>
+            <span class="na">url</span><span class="p">:</span> <span class="s1">'http://localhost:8080/api/user/login'</span><span class="p">,</span>
+            <span class="na">contentType</span><span class="p">:</span> <span class="s2">"application/json;charset=UTF-8"</span><span class="p">,</span>
+            <span class="na">data</span><span class="p">:</span> <span class="nx">name</span><span class="p">,</span>
+            <span class="na">dataType</span><span class="p">:</span> <span class="s1">'json'</span><span class="p">,</span>
+            <span class="na">xhrFields</span><span class="p">:</span> <span class="p">{</span>
+                <span class="na">withCredentials</span><span class="p">:</span> <span class="kc">true</span>
+            <span class="p">}</span>
+        <span class="p">}).</span><span class="nx">then</span><span class="p">(</span>
+                <span class="kd">function</span> <span class="p">(</span><span class="nx">obj</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="nx">$btn</span><span class="p">.</span><span class="nx">next</span><span class="p">(</span><span class="s1">'input'</span><span class="p">).</span><span class="nx">next</span><span class="p">(</span><span class="s1">'p'</span><span class="p">).</span><span class="nx">html</span><span class="p">(</span><span class="nx">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">(</span><span class="nx">obj</span><span class="p">));</span>
+                <span class="p">},</span>
+                <span class="kd">function</span> <span class="p">()</span> <span class="p">{</span>
+                    <span class="nx">$btn</span><span class="p">.</span><span class="nx">next</span><span class="p">(</span><span class="s1">'input'</span><span class="p">).</span><span class="nx">next</span><span class="p">(</span><span class="s1">'p'</span><span class="p">).</span><span class="nx">html</span><span class="p">(</span><span class="s1">'error...'</span><span class="p">);</span>
+                <span class="p">}</span>
+        <span class="p">)</span>
+    <span class="p">}</span>
+<span class="nt">&lt;/script&gt;</span>
+<span class="nt">&lt;/html&gt;</span>
+</code></pre>
+</div>
+
+<ul>
+  <li>然后启动web项目（这里推荐一个所见即所得工具：browser-sync）</li>
+</ul>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>browser-sync start --server --files "*.html"
+</code></pre>
+</div>
+<p><br /></p>
+
+<ul>
+  <li>接来下，做服务端的事情，新建一个SpringMVC项目，这里推荐一个自动生成Spring种子项目的网站：http://start.spring.io/</li>
+</ul>
+
+<p><img src="http://7xpjn9.com1.z0.glb.clouddn.com/4.53.33.png" alt="种子项目" /></p>
+
+<ul>
+  <li>项目结构如下：</li>
+</ul>
+
+<p><img src="http://7xpjn9.com1.z0.glb.clouddn.com/image/1.57.34.png" alt="项目结构" /></p>
+
+<ul>
+  <li>在pom.xml中引入lombok和guava</li>
+</ul>
+
+<figure class="highlight"><pre><code class="language-xml" data-lang="xml"><table style="border-spacing: 0"><tbody><tr><td class="gutter gl" style="text-align: right"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11</pre></td><td class="code"><pre><span class="nt">&lt;dependency&gt;</span>
+	<span class="nt">&lt;groupId&gt;</span>com.google.guava<span class="nt">&lt;/groupId&gt;</span>
+	<span class="nt">&lt;artifactId&gt;</span>guava<span class="nt">&lt;/artifactId&gt;</span>
+	<span class="nt">&lt;version&gt;</span>19.0<span class="nt">&lt;/version&gt;</span>
+<span class="nt">&lt;/dependency&gt;</span>
+
+<span class="nt">&lt;dependency&gt;</span>
+	<span class="nt">&lt;groupId&gt;</span>org.projectlombok<span class="nt">&lt;/groupId&gt;</span>
+	<span class="nt">&lt;artifactId&gt;</span>lombok<span class="nt">&lt;/artifactId&gt;</span>
+	<span class="nt">&lt;version&gt;</span>1.16.8<span class="nt">&lt;/version&gt;</span>
+<span class="nt">&lt;/dependency&gt;</span><span class="w">
+</span></pre></td></tr></tbody></table></code></pre></figure>
+
+<ul>
+  <li>模拟数据源：UserDB</li>
+</ul>
+
+<figure class="highlight"><pre><code class="language-java" data-lang="java"><table style="border-spacing: 0"><tbody><tr><td class="gutter gl" style="text-align: right"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13</pre></td><td class="code"><pre><span class="kd">public</span> <span class="kd">class</span> <span class="nc">UserDB</span> <span class="o">{</span>
+
+    <span class="kd">public</span> <span class="kd">static</span> <span class="n">Cache</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">User</span><span class="o">&gt;</span> <span class="n">userdb</span> <span class="o">=</span> <span class="n">CacheBuilder</span><span class="o">.</span><span class="na">newBuilder</span><span class="o">().</span><span class="na">expireAfterWrite</span><span class="o">(</span><span class="mi">1</span><span class="o">,</span> <span class="n">TimeUnit</span><span class="o">.</span><span class="na">DAYS</span><span class="o">).</span><span class="na">build</span><span class="o">();</span>
+
+    <span class="kd">static</span> <span class="o">{</span>
+        <span class="n">String</span> <span class="n">id1</span> <span class="o">=</span> <span class="n">UUID</span><span class="o">.</span><span class="na">randomUUID</span><span class="o">().</span><span class="na">toString</span><span class="o">();</span>
+        <span class="n">String</span> <span class="n">id2</span> <span class="o">=</span> <span class="n">UUID</span><span class="o">.</span><span class="na">randomUUID</span><span class="o">().</span><span class="na">toString</span><span class="o">();</span>
+        <span class="n">String</span> <span class="n">id3</span> <span class="o">=</span> <span class="n">UUID</span><span class="o">.</span><span class="na">randomUUID</span><span class="o">().</span><span class="na">toString</span><span class="o">();</span>
+        <span class="n">userdb</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">id1</span><span class="o">,</span> <span class="k">new</span> <span class="n">User</span><span class="o">(</span><span class="n">id1</span><span class="o">,</span> <span class="s">"jear"</span><span class="o">));</span>
+        <span class="n">userdb</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">id2</span><span class="o">,</span> <span class="k">new</span> <span class="n">User</span><span class="o">(</span><span class="n">id2</span><span class="o">,</span> <span class="s">"tom"</span><span class="o">));</span>
+        <span class="n">userdb</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">id3</span><span class="o">,</span> <span class="k">new</span> <span class="n">User</span><span class="o">(</span><span class="n">id3</span><span class="o">,</span> <span class="s">"jack"</span><span class="o">));</span>
+    <span class="o">}</span>
+<span class="o">}</span><span class="w">
+</span></pre></td></tr></tbody></table></code></pre></figure>
+
+<ul>
+  <li>编写示例控制器：UserController</li>
+</ul>
+
+<figure class="highlight"><pre><code class="language-java" data-lang="java"><table style="border-spacing: 0"><tbody><tr><td class="gutter gl" style="text-align: right"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19</pre></td><td class="code"><pre><span class="nd">@RestController</span>
+<span class="nd">@RequestMapping</span><span class="o">(</span><span class="s">"/users"</span><span class="o">)</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">UserController</span> <span class="o">{</span>
+
+    <span class="nd">@RequestMapping</span><span class="o">(</span><span class="n">method</span> <span class="o">=</span> <span class="n">RequestMethod</span><span class="o">.</span><span class="na">GET</span><span class="o">)</span>
+    <span class="n">List</span><span class="o">&lt;</span><span class="n">User</span><span class="o">&gt;</span> <span class="n">getList</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">Lists</span><span class="o">.</span><span class="na">newArrayList</span><span class="o">(</span><span class="n">userdb</span><span class="o">.</span><span class="na">asMap</span><span class="o">().</span><span class="na">values</span><span class="o">());</span>
+    <span class="o">}</span>
+
+    <span class="nd">@RequestMapping</span><span class="o">(</span><span class="n">method</span> <span class="o">=</span> <span class="n">RequestMethod</span><span class="o">.</span><span class="na">POST</span><span class="o">)</span>
+    <span class="n">List</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span> <span class="n">add</span><span class="o">(</span><span class="nd">@RequestBody</span> <span class="n">String</span> <span class="n">name</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">if</span> <span class="o">(</span><span class="n">userdb</span><span class="o">.</span><span class="na">asMap</span><span class="o">().</span><span class="na">values</span><span class="o">().</span><span class="na">stream</span><span class="o">().</span><span class="na">anyMatch</span><span class="o">(</span><span class="n">user</span> <span class="o">-&gt;</span> <span class="n">user</span><span class="o">.</span><span class="na">getName</span><span class="o">().</span><span class="na">equals</span><span class="o">(</span><span class="n">name</span><span class="o">)))</span> <span class="o">{</span>
+            <span class="k">return</span> <span class="n">Lists</span><span class="o">.</span><span class="na">newArrayList</span><span class="o">(</span><span class="s">"添加失败, 用户名'"</span> <span class="o">+</span> <span class="n">name</span> <span class="o">+</span> <span class="s">"'已存在"</span><span class="o">);</span>
+        <span class="o">}</span>
+        <span class="n">String</span> <span class="n">id</span> <span class="o">=</span> <span class="n">UUID</span><span class="o">.</span><span class="na">randomUUID</span><span class="o">().</span><span class="na">toString</span><span class="o">();</span>
+        <span class="n">userdb</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">id</span><span class="o">,</span> <span class="k">new</span> <span class="n">User</span><span class="o">(</span><span class="n">id</span><span class="o">,</span> <span class="n">name</span><span class="o">));</span>
+        <span class="k">return</span> <span class="n">Lists</span><span class="o">.</span><span class="na">newArrayList</span><span class="o">(</span><span class="s">"添加成功: "</span> <span class="o">+</span> <span class="n">userdb</span><span class="o">.</span><span class="na">getIfPresent</span><span class="o">(</span><span class="n">id</span><span class="o">));</span>
+    <span class="o">}</span>
+<span class="o">}</span><span class="w">
+</span></pre></td></tr></tbody></table></code></pre></figure>
+
+<ul>
+  <li>编写示例控制器：UserLoginController</li>
+</ul>
+
+<figure class="highlight"><pre><code class="language-java" data-lang="java"><table style="border-spacing: 0"><tbody><tr><td class="gutter gl" style="text-align: right"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20</pre></td><td class="code"><pre><span class="nd">@RestController</span>
+<span class="nd">@RequestMapping</span><span class="o">(</span><span class="s">"/user/login"</span><span class="o">)</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">UserLoginController</span> <span class="o">{</span>
+
+    <span class="nd">@RequestMapping</span><span class="o">(</span><span class="n">method</span> <span class="o">=</span> <span class="n">RequestMethod</span><span class="o">.</span><span class="na">GET</span><span class="o">)</span>
+    <span class="n">Object</span> <span class="n">getInfo</span><span class="o">(</span><span class="n">HttpSession</span> <span class="n">session</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">Object</span> <span class="n">object</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="na">getAttribute</span><span class="o">(</span><span class="s">"loginer"</span><span class="o">);</span>
+        <span class="k">return</span> <span class="n">object</span> <span class="o">==</span> <span class="kc">null</span> <span class="o">?</span> <span class="n">Lists</span><span class="o">.</span><span class="na">newArrayList</span><span class="o">(</span><span class="s">"未登录"</span><span class="o">)</span> <span class="o">:</span> <span class="n">object</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="nd">@RequestMapping</span><span class="o">(</span><span class="n">method</span> <span class="o">=</span> <span class="n">RequestMethod</span><span class="o">.</span><span class="na">POST</span><span class="o">)</span>
+    <span class="n">List</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span> <span class="n">login</span><span class="o">(</span><span class="n">HttpSession</span> <span class="n">session</span><span class="o">,</span> <span class="nd">@RequestBody</span> <span class="n">String</span> <span class="n">name</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">Optional</span><span class="o">&lt;</span><span class="n">User</span><span class="o">&gt;</span> <span class="n">user</span> <span class="o">=</span> <span class="n">userdb</span><span class="o">.</span><span class="na">asMap</span><span class="o">().</span><span class="na">values</span><span class="o">().</span><span class="na">stream</span><span class="o">().</span><span class="na">filter</span><span class="o">(</span><span class="n">user1</span> <span class="o">-&gt;</span> <span class="n">user1</span><span class="o">.</span><span class="na">getName</span><span class="o">().</span><span class="na">equals</span><span class="o">(</span><span class="n">name</span><span class="o">)).</span><span class="na">findAny</span><span class="o">();</span>
+        <span class="k">if</span> <span class="o">(</span><span class="n">user</span><span class="o">.</span><span class="na">isPresent</span><span class="o">())</span> <span class="o">{</span>
+            <span class="n">session</span><span class="o">.</span><span class="na">setAttribute</span><span class="o">(</span><span class="s">"loginer"</span><span class="o">,</span> <span class="n">user</span><span class="o">.</span><span class="na">get</span><span class="o">());</span>
+            <span class="k">return</span> <span class="n">Lists</span><span class="o">.</span><span class="na">newArrayList</span><span class="o">(</span><span class="s">"登录成功!"</span><span class="o">);</span>
+        <span class="o">}</span>
+        <span class="k">return</span> <span class="n">Lists</span><span class="o">.</span><span class="na">newArrayList</span><span class="o">(</span><span class="s">"登录失败, 找不到用户名:"</span> <span class="o">+</span> <span class="n">name</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span><span class="w">
+</span></pre></td></tr></tbody></table></code></pre></figure>
+
+<ul>
+  <li>最后启动服务端项目</li>
+</ul>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>mvn clean package
+debug模式启动Application
+</code></pre>
+</div>
+<p><br /></p>
+
+<ul>
+  <li>到这里，主要工作都完成了，打开浏览器，访问静态web项目，打开控制台，发现Ajax请求无法获取数据，这就是同源策略的限制</li>
+  <li>下面我们一步步来开启服务端的CORS支持</li>
+</ul>
+
+<p><br /></p>
+
+<hr />
+
+<p><br /></p>
+
+<h3 id="corsfilter-cors"><strong>CorsFilter: 过滤器阶段的CORS</strong></h3>
+
+<figure class="highlight"><pre><code class="language-java" data-lang="java"><table style="border-spacing: 0"><tbody><tr><td class="gutter gl" style="text-align: right"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21</pre></td><td class="code"><pre><span class="nd">@Configuration</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">WebConfig</span> <span class="kd">extends</span> <span class="n">WebMvcConfigurerAdapter</span> <span class="o">{</span>
+
+    <span class="nd">@Bean</span>
+    <span class="kd">public</span> <span class="n">FilterRegistrationBean</span> <span class="n">filterRegistrationBean</span><span class="o">()</span> <span class="o">{</span>
+        <span class="c1">// 对响应头进行CORS授权</span>
+        <span class="n">MyCorsRegistration</span> <span class="n">corsRegistration</span> <span class="o">=</span> <span class="k">new</span> <span class="n">MyCorsRegistration</span><span class="o">(</span><span class="s">"/**"</span><span class="o">);</span>
+        <span class="n">corsRegistration</span><span class="o">.</span><span class="na">allowedOrigins</span><span class="o">(</span><span class="n">CrossOrigin</span><span class="o">.</span><span class="na">DEFAULT_ORIGINS</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">allowedMethods</span><span class="o">(</span><span class="n">HttpMethod</span><span class="o">.</span><span class="na">GET</span><span class="o">.</span><span class="na">name</span><span class="o">(),</span> <span class="n">HttpMethod</span><span class="o">.</span><span class="na">HEAD</span><span class="o">.</span><span class="na">name</span><span class="o">(),</span> <span class="n">HttpMethod</span><span class="o">.</span><span class="na">POST</span><span class="o">.</span><span class="na">name</span><span class="o">(),</span> <span class="n">HttpMethod</span><span class="o">.</span><span class="na">PUT</span><span class="o">.</span><span class="na">name</span><span class="o">())</span>
+                <span class="o">.</span><span class="na">allowedHeaders</span><span class="o">(</span><span class="n">CrossOrigin</span><span class="o">.</span><span class="na">DEFAULT_ALLOWED_HEADERS</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">exposedHeaders</span><span class="o">(</span><span class="n">HttpHeaders</span><span class="o">.</span><span class="na">SET_COOKIE</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">allowCredentials</span><span class="o">(</span><span class="n">CrossOrigin</span><span class="o">.</span><span class="na">DEFAULT_ALLOW_CREDENTIALS</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">maxAge</span><span class="o">(</span><span class="n">CrossOrigin</span><span class="o">.</span><span class="na">DEFAULT_MAX_AGE</span><span class="o">);</span>
+
+        <span class="c1">// 注册CORS过滤器</span>
+        <span class="n">UrlBasedCorsConfigurationSource</span> <span class="n">configurationSource</span> <span class="o">=</span> <span class="k">new</span> <span class="n">UrlBasedCorsConfigurationSource</span><span class="o">();</span>
+        <span class="n">configurationSource</span><span class="o">.</span><span class="na">registerCorsConfiguration</span><span class="o">(</span><span class="s">"/**"</span><span class="o">,</span> <span class="n">corsRegistration</span><span class="o">.</span><span class="na">getCorsConfiguration</span><span class="o">());</span>
+        <span class="n">CorsFilter</span> <span class="n">corsFilter</span> <span class="o">=</span> <span class="k">new</span> <span class="n">CorsFilter</span><span class="o">(</span><span class="n">configurationSource</span><span class="o">);</span>
+        <span class="k">return</span> <span class="k">new</span> <span class="n">FilterRegistrationBean</span><span class="o">(</span><span class="n">corsFilter</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span><span class="w">
+</span></pre></td></tr></tbody></table></code></pre></figure>
+
+<ul>
+  <li>现在测试一下“简单跨域”和“非简单跨域”，已经可以正常响应了</li>
+</ul>
+
+<p><img src="http://7xpjn9.com1.z0.glb.clouddn.com/image/4.04.42.png" alt="浏览器图片" /></p>
+
+<ul>
+  <li>再来测试一下 “登录校验” 和 “登录”，看看cookie是否能正常跨域</li>
+</ul>
+
+<p><img src="http://7xpjn9.com1.z0.glb.clouddn.com/4.15.04.png" alt="浏览器图片" /></p>
+
+<ul>
+  <li>如果把服务端的allowCredentials设为false，或者ajax请求中不带{withCredentials: true}，那么登录校验永远都是未登录，因为cookie没有在浏览器和服务器之间传递</li>
+</ul>
+
+<p><br /></p>
+
+<hr />
+
+<p><br /></p>
+
+<h3 id="corsinterceptor-cors"><strong>CorsInterceptor: 拦截器阶段的CORS</strong></h3>
+
+<blockquote>
+  <p>既然已经有了Filter级别的CORS，为什么还要CorsInterceptor呢？因为控制粒度不一样！Filter是任意Servlet的前置过滤器，而Inteceptor只对DispatcherServlet下的请求拦截有效，它是请求进入Handler的最后一道防线，如果再设置一层Inteceptor防线，可以增强安全性和可控性。</p>
+</blockquote>
+
+<blockquote>
+  <p>关于这个阶段的CORS，不得不吐槽几句，Spring把CorsInteceptor写死在了拦截器链上的最后一个，也就是说如果我有自定义的Interceptor，请求一旦被我自己的拦截器拦截下来，则只能通过CorsFilter授权跨域，压根走不到CorsInterceptor，至于为什么，下面会讲到。</p>
+</blockquote>
+
+<blockquote>
+  <p>所以说CorsInterceptor是专为授权Handler中的跨域而写的。</p>
+</blockquote>
+
+<p>废话不多说，直接上代码：</p>
+
+<figure class="highlight"><pre><code class="language-java" data-lang="java"><table style="border-spacing: 0"><tbody><tr><td class="gutter gl" style="text-align: right"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31</pre></td><td class="code"><pre><span class="nd">@Configuration</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">WebConfig</span> <span class="kd">extends</span> <span class="n">WebMvcConfigurerAdapter</span> <span class="o">{</span>
+
+    <span class="nd">@Bean</span>
+    <span class="kd">public</span> <span class="n">FilterRegistrationBean</span> <span class="n">corsFilterRegistrationBean</span><span class="o">()</span> <span class="o">{</span>
+        <span class="c1">// 对响应头进行CORS授权</span>
+        <span class="n">MyCorsRegistration</span> <span class="n">corsRegistration</span> <span class="o">=</span> <span class="k">new</span> <span class="n">MyCorsRegistration</span><span class="o">(</span><span class="s">"/**"</span><span class="o">);</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">_configCorsParams</span><span class="o">(</span><span class="n">corsRegistration</span><span class="o">);</span>
+
+        <span class="c1">// 注册CORS过滤器</span>
+        <span class="n">UrlBasedCorsConfigurationSource</span> <span class="n">configurationSource</span> <span class="o">=</span> <span class="k">new</span> <span class="n">UrlBasedCorsConfigurationSource</span><span class="o">();</span>
+        <span class="n">configurationSource</span><span class="o">.</span><span class="na">registerCorsConfiguration</span><span class="o">(</span><span class="s">"/**"</span><span class="o">,</span> <span class="n">corsRegistration</span><span class="o">.</span><span class="na">getCorsConfiguration</span><span class="o">());</span>
+        <span class="n">CorsFilter</span> <span class="n">corsFilter</span> <span class="o">=</span> <span class="k">new</span> <span class="n">CorsFilter</span><span class="o">(</span><span class="n">configurationSource</span><span class="o">);</span>
+        <span class="k">return</span> <span class="k">new</span> <span class="n">FilterRegistrationBean</span><span class="o">(</span><span class="n">corsFilter</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="nd">@Override</span>
+    <span class="kd">public</span> <span class="kt">void</span> <span class="n">addCorsMappings</span><span class="o">(</span><span class="n">CorsRegistry</span> <span class="n">registry</span><span class="o">)</span> <span class="o">{</span>
+        <span class="c1">// 配置CorsInterceptor的CORS参数</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">_configCorsParams</span><span class="o">(</span><span class="n">registry</span><span class="o">.</span><span class="na">addMapping</span><span class="o">(</span><span class="s">"/**"</span><span class="o">));</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="kt">void</span> <span class="n">_configCorsParams</span><span class="o">(</span><span class="n">CorsRegistration</span> <span class="n">corsRegistration</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">corsRegistration</span><span class="o">.</span><span class="na">allowedOrigins</span><span class="o">(</span><span class="n">CrossOrigin</span><span class="o">.</span><span class="na">DEFAULT_ORIGINS</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">allowedMethods</span><span class="o">(</span><span class="n">HttpMethod</span><span class="o">.</span><span class="na">GET</span><span class="o">.</span><span class="na">name</span><span class="o">(),</span> <span class="n">HttpMethod</span><span class="o">.</span><span class="na">HEAD</span><span class="o">.</span><span class="na">name</span><span class="o">(),</span> <span class="n">HttpMethod</span><span class="o">.</span><span class="na">POST</span><span class="o">.</span><span class="na">name</span><span class="o">(),</span> <span class="n">HttpMethod</span><span class="o">.</span><span class="na">PUT</span><span class="o">.</span><span class="na">name</span><span class="o">())</span>
+                <span class="o">.</span><span class="na">allowedHeaders</span><span class="o">(</span><span class="n">CrossOrigin</span><span class="o">.</span><span class="na">DEFAULT_ALLOWED_HEADERS</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">exposedHeaders</span><span class="o">(</span><span class="n">HttpHeaders</span><span class="o">.</span><span class="na">SET_COOKIE</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">allowCredentials</span><span class="o">(</span><span class="n">CrossOrigin</span><span class="o">.</span><span class="na">DEFAULT_ALLOW_CREDENTIALS</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">maxAge</span><span class="o">(</span><span class="n">CrossOrigin</span><span class="o">.</span><span class="na">DEFAULT_MAX_AGE</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span><span class="w">
+</span></pre></td></tr></tbody></table></code></pre></figure>
+
+<ul>
+  <li>打开浏览器，效果和上面一样</li>
+</ul>
+
+<p><br /></p>
+
+<hr />
+
+<p><br /></p>
+
+<h3 id="crossoriginhandlercors"><strong>@CrossOrigin：Handler阶段的CORS</strong></h3>
+
+<p>如果把前面的代码认真写一遍，应该已经发现这个注解了，这个注解是用在控制器方法上的，其实Spring在这里用的还是CorsInterceptor，做最后一层拦截，这也就解释了为什么CorsInterceptor永远是最后一个执行的拦截器。</p>
+
+<p>这是最小控制粒度了，可以精确到某个请求的跨域控制</p>
+
+<figure class="highlight"><pre><code class="language-java" data-lang="java"><table style="border-spacing: 0"><tbody><tr><td class="gutter gl" style="text-align: right"><pre class="lineno">1
+2
+3
+4
+5
+6</pre></td><td class="code"><pre><span class="c1">// 先把WebConfig中前两阶段的配置注释掉，再到这里加跨域注解</span>
+<span class="nd">@CrossOrigin</span><span class="o">(</span><span class="n">origins</span> <span class="o">=</span> <span class="s">"http://localhost:3000"</span><span class="o">)</span>
+<span class="nd">@RequestMapping</span><span class="o">(</span><span class="n">method</span> <span class="o">=</span> <span class="n">RequestMethod</span><span class="o">.</span><span class="na">GET</span><span class="o">)</span>
+<span class="n">List</span><span class="o">&lt;</span><span class="n">User</span><span class="o">&gt;</span> <span class="n">getList</span><span class="o">()</span> <span class="o">{</span>
+    <span class="k">return</span> <span class="n">Lists</span><span class="o">.</span><span class="na">newArrayList</span><span class="o">(</span><span class="n">userdb</span><span class="o">.</span><span class="na">asMap</span><span class="o">().</span><span class="na">values</span><span class="o">());</span>
+<span class="o">}</span><span class="w">
+</span></pre></td></tr></tbody></table></code></pre></figure>
+
+<ul>
+  <li>打开浏览器，发现只有第一个请求可以正常跨域</li>
+</ul>
+
+<p><img src="http://7xpjn9.com1.z0.glb.clouddn.com/5.04.50.png" alt="Handler跨域" /></p>
+
+<p><br /></p>
+
+<hr />
+
+<p><br /></p>
+
+<h3 id="section-2"><strong>小结</strong></h3>
+
+<p>三个阶段的CORS配置顺序是后面叠加到前面，而不是后面完全覆盖前面的，所以在设计的时候，每个阶段如何精确控制CORS，还需要在实践中慢慢探索……</p>
+
+<p><br /></p>
+
+<hr />
+
+<p><br /></p>
+
+<h3 id="corsfilter"><strong>追求更好的开发体验：整合第三方CORSFilter</strong></h3>
+
+<ul>
+  <li>
+    <p>对这个类库的使用和分析将在下一篇展开</p>
+  </li>
+  <li>
+    <p>官网：<a href="http://software.dzhuvinov.com/cors-filter.html">http://software.dzhuvinov.com/cors-filter.html</a></p>
+  </li>
+  <li>
+    <p>喜欢用这个CORSFilter主要是因为它支持CORS配置文件，能够自动读取classpath下的cors.properties，还有file watching的功能</p>
+  </li>
+</ul>
+
+<p><br /></p>
+
+<hr />
+
+<p><br /></p>
+
+<h3 id="section-3"><strong>示例代码下载</strong></h3>
+
+<ul>
+  <li><a href="http://git.oschina.net/jearton/springmvc-cors">http://git.oschina.net/jearton/springmvc-cors</a></li>
+  <li>
+    <p><a href="http://git.oschina.net/jearton/web-demo/">http://git.oschina.net/jearton/web-demo/</a></p>
+
+  </li>
+</ul>
+
+  </div>
+
+</article>
+
+      </div>
+    </div>
+
+    <footer class="site-footer">
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Jear</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li>Jear</li>
+          <li><a href="mailto:m18796827019@163.com">m18796827019@163.com</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col footer-col-2">
+        <ul class="social-media-list">
+          
+          <li>
+            <a href="https://github.com/jearton"><span class="icon icon--github"><svg viewBox="0 0 16 16"><path fill="#828282" d="M7.999,0.431c-4.285,0-7.76,3.474-7.76,7.761 c0,3.428,2.223,6.337,5.307,7.363c0.388,0.071,0.53-0.168,0.53-0.374c0-0.184-0.007-0.672-0.01-1.32 c-2.159,0.469-2.614-1.04-2.614-1.04c-0.353-0.896-0.862-1.135-0.862-1.135c-0.705-0.481,0.053-0.472,0.053-0.472 c0.779,0.055,1.189,0.8,1.189,0.8c0.692,1.186,1.816,0.843,2.258,0.645c0.071-0.502,0.271-0.843,0.493-1.037 C4.86,11.425,3.049,10.76,3.049,7.786c0-0.847,0.302-1.54,0.799-2.082C3.768,5.507,3.501,4.718,3.924,3.65 c0,0,0.652-0.209,2.134,0.796C6.677,4.273,7.34,4.187,8,4.184c0.659,0.003,1.323,0.089,1.943,0.261 c1.482-1.004,2.132-0.796,2.132-0.796c0.423,1.068,0.157,1.857,0.077,2.054c0.497,0.542,0.798,1.235,0.798,2.082 c0,2.981-1.814,3.637-3.543,3.829c0.279,0.24,0.527,0.713,0.527,1.437c0,1.037-0.01,1.874-0.01,2.129 c0,0.208,0.14,0.449,0.534,0.373c3.081-1.028,5.302-3.935,5.302-7.362C15.76,3.906,12.285,0.431,7.999,0.431z"/></svg>
+</span><span class="username">jearton</span></a>
+
+          </li>
+          
+
+          
+        </ul>
+      </div>
+
+      <div class="footer-col footer-col-3">
+        <p>Blog of Jear
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+
+
+  </body>
+
+</html>
